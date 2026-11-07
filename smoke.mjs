@@ -11,6 +11,7 @@ import {
 	normalizeShortcut,
 	isPermissionMode,
 	nextMode,
+	sessionIdFromHeader,
 	withPolicy,
 } from "./core.ts";
 
@@ -155,6 +156,14 @@ assert.match(unlabeledBatch, /> rm -rf \/tmp\/batch-demo/);
 assert.match(unlabeledBatch, /One approval covers every tool call/);
 assert.ok(!unlabeledBatch.includes("What it does:"));
 assert.ok(!unlabeledBatch.includes("DANGEROUS"));
+// session id from a session file header (first JSONL line)
+assert.equal(sessionIdFromHeader('{"type":"session","id":"abc"}\n{"type":"message"}\n'), "abc");
+assert.equal(sessionIdFromHeader('{"type":"session","id":"abc"}'), "abc");
+assert.equal(sessionIdFromHeader('{"type":"session"}\n'), undefined);
+assert.equal(sessionIdFromHeader('{"type":"session","id":42}\n'), undefined);
+assert.equal(sessionIdFromHeader("not json\n"), undefined);
+assert.equal(sessionIdFromHeader(""), undefined);
+
 // the no-model failure gets a more specific warning
 const noModelSingle = formatUnlabeled(["ls -la"], "no-model");
 assert.match(noModelSingle, /! no classifier model set: these calls could not be labeled \(pick one with \/seatbelt\)/);

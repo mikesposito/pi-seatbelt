@@ -29,6 +29,17 @@ export function normalizeShortcut(value: unknown): string {
 	return key !== "" && !/\s/.test(key) ? key : DEFAULT_SHORTCUT;
 }
 
+/** The session id from a session file's first line (the JSONL header);
+ * undefined when the line is missing or malformed. */
+export function sessionIdFromHeader(raw: string): string | undefined {
+	try {
+		const id = (JSON.parse(raw.split("\n", 1)[0] ?? "") as { id?: unknown }).id;
+		return typeof id === "string" ? id : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 export type Assessment = {
 	danger: Danger;
 	purpose: string;
