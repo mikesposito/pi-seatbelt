@@ -21,7 +21,8 @@
  * Permission modes (cycled with the configured shortcut key, default alt+b,
  * shown in the status bar) are per session: switching affects only the
  * current session and is remembered per session id, so resuming a session
- * restores its mode. New sessions start in the config's default "mode",
+ * restores its mode, and a forked session inherits the mode of the session
+ * it was forked from. New sessions start in the config's default "mode",
  * settable with /seatbelt:default.
  * - "fastened" (default): one approval dialog per chain of gated tool calls.
  * - "auto": chains without a dangerous call run without asking; a dangerous
@@ -48,6 +49,7 @@ import {
 	isPermissionMode,
 	nextMode,
 	plainStyle,
+	sessionIdFromHeader,
 	withPolicy,
 	type Assessment,
 	type ClassifyFailure,
@@ -147,6 +149,21 @@ function setSessionMode(ctx: ExtensionContext, mode: PermissionMode): void {
 	sessionModes.set(ctx.sessionManager.getSessionId(), mode);
 	mkdirSync(CONFIG_DIR, { recursive: true });
 	writeFileSync(SESSION_MODES_PATH, `${JSON.stringify(Object.fromEntries(sessionModes), null, 2)}\n`);
+}
+
+// A fork gets a fresh session id, so without this it would fall back to the
+// config default; copy the parent session's stored mode instead. The parent
+// id is the id in the first line (the JSONL header) of the previous file.
+function inheritModeOnFork(previousSessionFile: string | undefined, ctx: ExtensionContext): void {
+	if (!previousSessionFile) return;
+	let parentId: string | undefined;
+	try {
+		parentId = sessionIdFromHeader(readFileSync(previousSessionFile, "utf8"));
+	} catch {
+		return;
+	}
+	const parentMode = parentId ? sessionModes.get(parentId) : undefined;
+	if (parentMode) setSessionMode(ctx, parentMode);
 }
 
 // User decisions from the current session, fed to the classifier as context.
@@ -531,7 +548,8 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
-	pi.on("session_start", (_event, ctx) => {
+	pi.on("session_start", (event, ctx) => {
+		if (event.reason === "fork") inheritModeOnFork(event.previousSessionFile, ctx);
 		updateStatus(ctx);
 		if (hasSeededFreshConfig && ctx.hasUI) {
 			ctx.ui.notify(
